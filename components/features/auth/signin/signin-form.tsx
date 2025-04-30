@@ -62,7 +62,7 @@ export function LoginForm({
       // Invalidate React Query cache to force a refetch with the new token
       window.dispatchEvent(new Event('auth-changed'));
       
-      router.push("/templates");
+      router.push("/v1/templates");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "An unknown error occurred"

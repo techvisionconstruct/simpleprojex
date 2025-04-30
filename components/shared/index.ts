@@ -229,3 +229,7 @@ export { InputOTP } from "./input-otp/input-otp"
 export { InputOTPSeparator } from "./input-otp/input-otp-separator"
 export { InputOTPSlot } from "./input-otp/input-otp-slot"
 export { InputOTPGroup } from "./input-otp/input-otp-group"
+/**
+ * VisuallyHidden
+ */
+export { VisuallyHidden } from "./visually-hidden/visually-hidden"

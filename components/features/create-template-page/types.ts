@@ -54,3 +54,8 @@ export interface Template {
     type: string;
   }
   
+  export interface FormulaToken {
+    id: number;
+    text: string;
+    type: 'variable' | 'operator' | 'number' | 'function';
+  }

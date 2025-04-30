@@ -4,6 +4,7 @@ import { getModules } from "@/api/client/modules";
 import { getElements } from "@/api/client/elements";
 import { Module } from "./types";
 import { Element } from "./types";
+import { Parameter } from "./types";
 import {
   Card,
   CardContent,
@@ -46,11 +47,21 @@ export function ModulesTab({
   onChange,
   onPrev,
   onNext,
+  parameterValue,
+  openAddParamDialog,
+  handleAddParamDialog,
+  handleAddParam,
+  onParameterChange,
 }: {
   value: Module[];
   onChange: (modules: ModuleForm) => void;
   onPrev: () => void;
   onNext: () => void;
+  parameterValue: Parameter[];
+  openAddParamDialog: (name: string) => void;
+  handleAddParamDialog: () => void;
+  handleAddParam: (param: Parameter) => void;
+  onParameterChange: (params: Parameter[]) => void;
 }) {
   const [input, setInput] = React.useState("");
   const [added, setAdded] = React.useState<Module[]>(value);
@@ -105,12 +116,23 @@ export function ModulesTab({
   function handleDeleteModule(idx: number) {
     const updated = added.filter((_, i) => i !== idx);
     setAdded(updated);
+    
+    // Create updated modules array with all current elements to pass to parent
+    const modulesWithElements = updated.map((mod, index) => {
+      const combinedElements = getCombinedElements(index);
+      return {
+        ...mod,
+        elements: combinedElements,
+      };
+    });
+    
+    // Update parent component with the latest data
+    onChange(modulesWithElements);
   }
 
   function handleDeleteElement(moduleIdx: number, elIdx: number) {
-    const elements = getCombinedElements(moduleIdx);
-    if (elements.length <= elIdx) return;
-    const elementToDelete = elements[elIdx];
+    const combinedElements = getCombinedElements(moduleIdx);
+    const elementToDelete = combinedElements[elIdx];
     const apiElements = elementsQueries[moduleIdx]?.data || [];
     const apiElementIndex = apiElements.findIndex(
       (el: Element) => el.id === elementToDelete.id
@@ -134,7 +156,20 @@ export function ModulesTab({
       setAdded(updatedModules);
     }
 
+    // Update the local state
     setAdded((prev) => [...prev]);
+    
+    // Create updated modules array with all current elements to pass to parent
+    const modulesWithElements = added.map((mod, index) => {
+      const combinedElements = getCombinedElements(index);
+      return {
+        ...mod,
+        elements: combinedElements,
+      };
+    });
+    
+    // Update parent component with the latest data
+    onChange(modulesWithElements);
   }
 
   function handleEditModule(idx: number) {
@@ -149,6 +184,18 @@ export function ModulesTab({
     );
     setAdded(updated);
     setEditingModule(null);
+    
+    // Create updated modules array with all current elements to pass to parent
+    const modulesWithElements = updated.map((mod, index) => {
+      const combinedElements = getCombinedElements(index);
+      return {
+        ...mod,
+        elements: combinedElements,
+      };
+    });
+    
+    // Update parent component with the latest data
+    onChange(modulesWithElements);
   }
 
   function handleAddElement(idx: number) {
@@ -172,11 +219,26 @@ export function ModulesTab({
   function handleSaveAddElement(module: Module, newElement: Element) {
     const moduleIdx = added.findIndex((m) => m.id === module.id);
     if (moduleIdx >= 0) {
+      // Ensure the data array exists
       if (!elementsQueries[moduleIdx].data) {
         elementsQueries[moduleIdx].data = [];
       }
+      
+      // Add the new element to the array
       elementsQueries[moduleIdx].data.push(newElement);
+      
+      // Create updated modules array with all current elements to pass to parent
+      const modulesWithElements = added.map((mod, index) => {
+        const combinedElements = getCombinedElements(index);
+        return {
+          ...mod,
+          elements: combinedElements,
+        };
+      });
+      
+      // Update local state and parent component
       setAdded([...added]);
+      onChange(modulesWithElements);
     }
   }
 
@@ -238,7 +300,18 @@ export function ModulesTab({
       }
     }
 
+    // Create updated modules array with all current elements to pass to parent
+    const modulesWithElements = added.map((mod, index) => {
+      const combinedElements = getCombinedElements(index);
+      return {
+        ...mod,
+        elements: combinedElements,
+      };
+    });
+    
+    // Update local state and parent component
     setAdded((prev) => [...prev]);
+    onChange(modulesWithElements);
   }
 
   function handleInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -594,15 +667,24 @@ export function ModulesTab({
         onClose={() => setIsAddElementDialogOpen(false)}
         module={addElementModule}
         onSave={handleSaveAddElement}
+        parameterValue={parameterValue}
+        openAddParamDialog={openAddParamDialog}
+        handleAddParamDialog={handleAddParamDialog}
+        handleAddParam={handleAddParam}
+        onParameterChange={onParameterChange}
       />
 
-      {/* Edit Element Dialog */}
       <EditElementDialog
         isOpen={isEditElementDialogOpen}
         onClose={() => setIsEditElementDialogOpen(false)}
         module={addElementModule}
         element={editingElement}
         onSave={handleSaveEditedElement}
+        parameterValue={parameterValue}
+        openAddParamDialog={openAddParamDialog}
+        handleAddParamDialog={handleAddParamDialog}
+        handleAddParam={handleAddParam}
+        onParameterChange={onParameterChange}
       />
     </div>
   );

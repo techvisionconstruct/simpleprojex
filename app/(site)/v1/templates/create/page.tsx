@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Tabs, TabsContent, Card, CardContent, Button } from "@/components/shared";
 import { TemplateDetailsTab } from "@/components/features/create-template-page/template-details-tab";
-import { ParametersTab } from "@/components/features/create-template-page/parameters-tab";
-import { ModulesTab } from "@/components/features/create-template-page/modules-tab";
+import { TradesTab } from "@/components/features/create-template-page/trades-tab";
 import { PreviewTab } from "@/components/features/create-template-page/preview-tab";
 import {
   ModuleForm,
@@ -30,7 +29,7 @@ export default function CreateTemplate() {
   const [parameters, setParameters] = useState<ParameterForm>([]);
   const [modules, setModules] = useState<ModuleForm>([]);
   const [isTourRunning, setIsTourRunning] = useState(false);
-  const tabSteps = ["details", "modules", "parameters", "preview"];
+  const tabSteps = ["details", "trades", "preview"];
   const currentStepIndex = tabSteps.indexOf(tab);
   
   // Check if the user has seen the tour
@@ -80,28 +79,45 @@ export default function CreateTemplate() {
           <CardContent className="p-6">
             <Tabs value={tab} onValueChange={handleTabChange} className="w-full">
               <div className="flex justify-between items-center w-full mb-8 relative max-w-5xl mx-auto">
-                <div className="absolute top-5 left-0 w-full h-0.5 bg-muted -z-10"></div>
+                {/* Background track for progress bar */}
+                <div className="absolute top-[22px] left-[6%] right-[6%] h-1.5 bg-muted rounded-full"></div>
+                
+                {/* Progress bars between steps */}
+                <div 
+                  className={`absolute top-[22px] left-[6%] w-[44%] h-1.5 rounded-full transition-all duration-500 ease-in-out ${
+                    currentStepIndex >= 1 ? "bg-primary shadow-sm shadow-primary/20" : "bg-muted"
+                  }`}
+                  style={{ zIndex: 5 }}
+                ></div>
+                <div 
+                  className={`absolute top-[22px] left-[50%] w-[44%] h-1.5 rounded-full transition-all duration-500 ease-in-out ${
+                    currentStepIndex >= 2 ? "bg-primary shadow-sm shadow-primary/20" : "bg-muted"
+                  }`}
+                  style={{ zIndex: 5 }}
+                ></div>
+
                 {tabSteps.map((step, index) => (
                   <div
                     key={step}
-                    className={`flex flex-col items-center relative tab-trigger ${index === 0 ? 'details-tab-trigger' : ''} ${index === 1 ? 'modules-tab-trigger' : ''} ${index === 2 ? 'parameters-tab-trigger' : ''} ${index === 3 ? 'preview-tab-trigger' : ''}`}
+                    className={`flex flex-col items-center relative tab-trigger ${index === 0 ? 'details-tab-trigger' : ''} ${index === 1 ? 'trades-tab-trigger' : ''} ${index === 2 ? 'preview-tab-trigger' : ''}`}
                     data-value={step}
                     onClick={() => {
                       if (index <= currentStepIndex + 1) {
                         setTab(step);
                       }
                     }}
+                    style={{ zIndex: 10 }}
                   >
                     <div
                       className={`w-12 h-12 rounded-full flex items-center justify-center border-2 cursor-pointer 
                         ${
                           index <= currentStepIndex
-                            ? "bg-primary text-primary-foreground border-primary"
+                            ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20"
                             : index === currentStepIndex + 1
                             ? "border-primary text-primary hover:bg-primary/10"
                             : "border-muted-foreground text-muted-foreground"
                         }
-                        transition-all duration-200 hover:scale-105
+                        transition-all duration-300 hover:scale-105 z-10
                       `}
                     >
                       {index < currentStepIndex ? (
@@ -131,39 +147,17 @@ export default function CreateTemplate() {
                 <TemplateDetailsTab
                   value={templateDetails}
                   onChange={setTemplateDetails}
-                  onNext={() => setTab("modules")}
+                  onNext={() => setTab("trades")}
                 />
               </TabsContent>
 
-              <TabsContent value="modules" className="modules-tab-content">
-                <ModulesTab
-                  value={modules}
-                  onChange={setModules}
-                  onPrev={() => setTab("details")}
-                  onNext={() => setTab("parameters")}
+              <TabsContent value="trades" className="trades-tab-content">
+                <TradesTab
+                  moduleValue={modules}
+                  onModuleChange={setModules}
                   parameterValue={parameters}
                   onParameterChange={setParameters}
-                  openAddParamDialog={(name) => {
-                    // Store name in localStorage to use when parameter tab is active
-                    if (name) localStorage.setItem('pendingParamName', name);
-                    setTab("parameters");
-                  }}
-                  handleAddParamDialog={() => {
-                    // This would typically be handled in the parameters tab
-                    console.log("Add param dialog should be handled in parameters tab");
-                  }}
-                  handleAddParam={(param) => {
-                    // Add the parameter to the parameters array
-                    setParameters(prev => [...prev, param]);
-                  }}
-                />
-              </TabsContent>
-
-              <TabsContent value="parameters" className="parameters-tab-content">
-                <ParametersTab
-                  value={parameters}
-                  onChange={setParameters}
-                  onPrev={() => setTab("modules")}
+                  onPrev={() => setTab("details")}
                   onNext={() => setTab("preview")}
                 />
               </TabsContent>

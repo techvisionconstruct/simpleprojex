@@ -7,7 +7,7 @@ export default function middleware(request: NextRequest) {
 
   // Redirect logged-in users from login to templates page
   if ((pathname.startsWith('/signin') || pathname.startsWith('/signup')) && authToken) {
-    const url = new URL('/templates', request.url)
+    const url = new URL('/v1/templates', request.url)
     return NextResponse.redirect(url)
   }
 

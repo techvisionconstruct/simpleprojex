@@ -19,9 +19,13 @@ export const parametersSchema = z
   .array(
     z.object({
       id: z.number(),
-      name: z.string().min(1),
+      name: z.string().min(1, "Name is required"),
       value: z.number(),
-      type: z.string().min(1),
+      type: z.string()
+        .min(1, "Type is required")
+        .refine((type) => type !== "", {
+          message: "Please select a valid type",
+        }),
     })
   )
   .min(1, { message: "At least one parameter is required" });
