@@ -40,3 +40,41 @@ export function evaluateFormula(
     return 0;
   }
 }
+
+/**
+ * Formats a number as currency (USD)
+ * @param value Number to format as currency
+ * @param options Optional formatting options
+ * @returns Formatted currency string
+ */
+export function formatCurrency(
+  value: number | string | undefined | null, 
+  options: {
+    locale?: string;
+    currency?: string;
+    minimumFractionDigits?: number;
+    maximumFractionDigits?: number;
+  } = {}
+): string {
+  // Handle null/undefined values
+  if (value === null || value === undefined) return "$0.00";
+  
+  // Convert string to number if needed
+  const numValue = typeof value === 'number' ? value : parseFloat(value) || 0;
+  
+  // Set default options
+  const {
+    locale = 'en-US',
+    currency = 'USD',
+    minimumFractionDigits = 2,
+    maximumFractionDigits = 2
+  } = options;
+  
+  // Format the currency
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency,
+    minimumFractionDigits,
+    maximumFractionDigits
+  }).format(numValue);
+}
