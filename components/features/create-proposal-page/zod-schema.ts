@@ -1,4 +1,15 @@
 import { z } from "zod";
+import {
+  Template,
+  Module,
+  Element,
+  Parameter,
+  ElementWithValues,
+  ProposalFormData,
+  template_elements,
+  PModule,
+  ProposalData
+} from "./types";
 
 // Define schemas for each component of the form
 export const elementSchema = z.object({
@@ -37,95 +48,79 @@ export const elementWithValuesSchema = z.object({
   markup: z.number().default(10),
 });
 
-// Define the template element schema
-export const templateElementSchema = z.object({
-  id: z.number(),
-  element: elementSchema,
-  material_cost: z.number().optional(),
-  labor_cost: z.number().optional(),
-  image: z.string().optional(),
-  module: moduleSchema,
-  markup: z.number().optional(),
-});
-
-export const templateSchema = z.object({
+// This matches the backend CreateProjectSchema
+export const proposalSubmissionSchema = z.object({
   id: z.number(),
   name: z.string(),
+  title: z.string(),
   description: z.string(),
+  clientName: z.string(),
+  clientEmail: z.string().email(),
+  clientPhone: z.string(),
+  clientAddress: z.string(),
   image: z.string().optional(),
-  modules: z.array(moduleSchema).optional(),
-  parameters: z.array(parameterSchema).optional(),
-  template_elements: z.array(templateElementSchema).optional(),
-});
-
-// Main proposal form schema
-export const proposalFormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  description: z.string().min(1, "Description is required"),
-  client_name: z.string().min(1, "Client name is required"),
-  client_email: z.string().email("Invalid email address"),
-  phone_number: z.string().min(1, "Phone number is required"),
-  address: z.string().min(1, "Address is required"),
-  image: z.string().url("Invalid image URL"),
-  selectedTemplate: z.any().optional(),
-  selectedModules: z
-    .array(moduleSchema)
-    .min(1, "At least one module must be selected"),
-  selectedParameters: z
-    .array(parameterSchema)
-    .min(1, "At least one parameter must be selected"),
-  selectedElements: z
-    .array(elementWithValuesSchema)
-    .min(1, "At least one element must be selected"),
-});
-
-export type Template = z.infer<typeof templateSchema>;
-export type Module = z.infer<typeof moduleSchema>;
-export type Element = z.infer<typeof elementSchema>;
-export type Parameter = z.infer<typeof parameterSchema>;
-export type ElementWithValues = z.infer<typeof elementWithValuesSchema>;
-export type TemplateElement = z.infer<typeof templateElementSchema>;
-export type ProposalFormData = z.infer<typeof proposalFormSchema>;
-
-export function validateProposalForm(data: ProposalFormData) {
-  const parseResult = proposalFormSchema.safeParse(data);
-
-  if (parseResult.success) {
-    // Create a submission schema that excludes the selectedTemplate field
-    const submissionSchema = proposalFormSchema.transform(
-      ({ selectedTemplate, ...rest }) => rest
-    );
-
-    // Parse with the submission schema to get the final data structure without selectedTemplate
-    return submissionSchema.safeParse(data);
-  }
-
-  // Return the original validation error
-  return parseResult;
-}
-
-// Validate individual sections
-export function validateProposalDetails(
-  data: Pick<
-    ProposalFormData,
-    | "name"
-    | "description"
-    | "client_name"
-    | "client_email"
-    | "phone_number"
-    | "address"
-    | "image"
-  >
-) {
-  return proposalFormSchema
-    .pick({
-      name: true,
-      description: true,
-      client_name: true,
-      client_email: true,
-      phone_number: true,
-      address: true,
-      image: true,
+  parameters: z.array(parameterSchema),
+  template_elements: z.array(
+    z.object({
+      id: z.number(),
+      formula: z.string().optional(),
+      labor_formula: z.string().optional(),
+      material_cost: z.number(),
+      labor_cost: z.number(),
+      markup: z.number(),
+      element: z.object({
+        id: z.number(),
+        name: z.string(),
+        description: z.string().optional(),
+        formula: z.string().optional(),
+        labor_formula: z.string().optional()
+      }),
+      module: z.object({
+        id: z.number(),
+        name: z.string(),
+        description: z.string().optional()
+      })
     })
-    .safeParse(data);
-}
+  )
+});
+
+// This is used for client-side form validation
+export const proposalFormSchema = z.object({
+  name: z.string().min(3, "Name is required and must be at least 3 characters"),
+  description: z.string().min(10, "Description is required and must be at least 10 characters"),
+  client_name: z.string().min(3, "Client name is required"),
+  client_email: z.string().email("Must be a valid email address"),
+  phone_number: z.string().min(7, "Phone number is required"),
+  address: z.string().min(5, "Address is required"),
+  image: z.string().optional(),
+  selectedTemplate: z.object({
+    id: z.number(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+    image: z.string().optional(),
+  }).nullable().refine(val => val !== null, {
+    message: "Please select a template"
+  }),
+  selectedModules: z.array(moduleSchema).min(1, "Please select at least one module"),
+  selectedParameters: z.array(parameterSchema).min(1, "Please select at least one parameter"),
+  selectedElements: z.array(elementWithValuesSchema).min(1, "Please select at least one element"),
+});
+
+// Re-export types from types.ts for convenience
+export type {
+  Template,
+  Module,
+  Element,
+  Parameter,
+  ElementWithValues,
+  ProposalFormData,
+  template_elements,
+  PModule,
+  ProposalData
+};
+
+export const validateProposalForm = (data: ProposalFormData) => {
+  return proposalFormSchema.safeParse(data);
+};
+
+export { z };
