@@ -14,16 +14,17 @@ import {
   TabsTrigger,
   TabsContent,
   Button,
+  Card,
+  CardContent,
 } from "@/components/shared";
-import { Save, Loader2, Info, HelpCircle } from "lucide-react";
+import { Check, CircleDot, HelpCircle } from "lucide-react";
 import { evaluateFormula } from "@/lib/formula-evaluator";
 import { toast } from "sonner";
 import { CreateProposalTour } from "@/components/features/tour-guide/create-proposal-tour";
 
-import { ProposalDetailsTab } from "@/components/features/create-proposal-page/proposal-details-tab";
 import { TemplateSelectionTab } from "@/components/features/create-proposal-page/template-selection-tab";
-import { ModulesTab } from "@/components/features/create-proposal-page/modules-tab";
-import { ParametersTab } from "@/components/features/create-proposal-page/parameters-tab";
+import { ProposalDetailsTab } from "@/components/features/create-proposal-page/proposal-details-tab";
+import { TradesTab } from "@/components/features/create-proposal-page/trades-tab";
 import {
   ProposalFormData,
   Template,
@@ -33,10 +34,11 @@ import {
   ElementWithValues,
   validateProposalForm,
 } from "@/components/features/create-proposal-page/zod-schema";
+import { TemplateElementWithValues } from "@/components/features/create-proposal-page/types";
 
 export default function CreateProposal() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("details");
+  const [activeTab, setActiveTab] = useState("template");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isTourRunning, setIsTourRunning] = useState(false);
@@ -48,7 +50,7 @@ export default function CreateProposal() {
     client_email: "",
     phone_number: "",
     address: "",
-    image: "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b",
+    image: "",
   });
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(
     null
@@ -59,6 +61,11 @@ export default function CreateProposal() {
   const [selectedElements, setSelectedElements] = useState<ElementWithValues[]>(
     []
   );
+  const [useGlobalMarkup, setUseGlobalMarkup] = useState(false);
+  const [globalMarkupPercentage, setGlobalMarkupPercentage] = useState(10);
+
+  const tabSteps = ["template", "details", "trades"];
+  const currentStepIndex = tabSteps.indexOf(activeTab);
 
   // Check if the user has seen the tour
   useEffect(() => {
@@ -132,7 +139,7 @@ export default function CreateProposal() {
     };
 
     // Map template elements to the format required for selectedElements
-    let elementsFromTemplate = templateElements.map((templateElement) => {
+    let elementsFromTemplate = templateElements.map((templateElement: TemplateElementWithValues) => {
       return {
         id: templateElement.element.id,
         element: templateElement.element,
@@ -151,8 +158,6 @@ export default function CreateProposal() {
       parametersList
     );
 
-    console.log("test", elementsFromTemplate);
-
     // Update all the related state variables
     setSelectedTemplate(sanitizedTemplate);
     setSelectedModules(template.modules || []);
@@ -165,6 +170,10 @@ export default function CreateProposal() {
       const exists = prev.find((m) => m.id === module.id);
 
       if (exists) {
+        // When removing a module, also remove its elements
+        setSelectedElements(prev => 
+          prev.filter(element => element.module.id !== module.id)
+        );
         return prev.filter((m) => m.id !== module.id);
       } else {
         return [...prev, module];
@@ -186,7 +195,7 @@ export default function CreateProposal() {
     elements: ElementWithValues[],
     parameters: Parameter[]
   ) => {
-    return elements.map((el) => {
+    return elements.map((el: ElementWithValues) => {
       const materialFormula = el.formula || el.element.formula || "";
       const materialCost = evaluateFormula(materialFormula, parameters);
 
@@ -243,17 +252,28 @@ export default function CreateProposal() {
           description: element.description || "",
         };
 
+        // Create a new element and calculate its initial costs
+        const newElement = {
+          id: Date.now(), // temporary unique ID
+          element: safeElement,
+          module: module,
+          formula: element.formula || "",
+          labor_formula: element.labor_formula || "",
+          material_cost: 0,
+          labor_cost: 0,
+          markup: 10,
+        };
+
+        // Calculate costs based on current parameters
+        const materialCost = evaluateFormula(newElement.formula, selectedParameters);
+        const laborCost = evaluateFormula(newElement.labor_formula, selectedParameters);
+
         return [
           ...prev,
           {
-            id: Date.now(), // temporary unique ID
-            element: safeElement,
-            module: module,
-            formula: element.formula || "",
-            labor_formula: element.labor_formula || "",
-            material_cost: 0,
-            labor_cost: 0,
-            markup: 10,
+            ...newElement,
+            material_cost: materialCost,
+            labor_cost: laborCost,
           },
         ];
       }
@@ -274,6 +294,7 @@ export default function CreateProposal() {
             ...e,
             [field]: value,
             ...(field === "formula" ? { formula } : {}),
+            ...(field === "labor_formula" ? { labor_formula: formula } : {}),
           };
         }
         return e;
@@ -285,6 +306,11 @@ export default function CreateProposal() {
 
       return newElements;
     });
+  };
+
+  const handleGlobalMarkupChange = (isUse: boolean, percentage: number) => {
+    setUseGlobalMarkup(isUse);
+    setGlobalMarkupPercentage(percentage);
   };
 
   const handleSubmit = () => {
@@ -314,7 +340,6 @@ export default function CreateProposal() {
         const firstError = validationResult.error.errors[0];
         const errorPath = firstError.path[0] as string;
 
-        // Show toast notification for validation error
         toast.error(`Please fix the following issue: ${firstError.message}`, {
           position: "top-center",
           duration: 5000,
@@ -331,18 +356,59 @@ export default function CreateProposal() {
           setActiveTab("template");
         } else if (
           errorPath.includes("selectedModules") ||
-          errorPath.includes("selectedElements")
+          errorPath.includes("selectedElements") ||
+          errorPath.includes("selectedParameters")
         ) {
-          setActiveTab("modules");
-        } else if (errorPath.includes("selectedParameters")) {
-          setActiveTab("parameters");
+          setActiveTab("trades");
         }
 
         setIsSubmitting(false);
         return;
       }
 
-      submitProposal({
+      // Apply global markup if enabled
+      const elementsWithMarkup = selectedElements.map(el => ({
+        ...el,
+        markup: useGlobalMarkup ? globalMarkupPercentage : el.markup
+      }));
+
+      const formattedElements = elementsWithMarkup.map(el => ({
+        id: el.id,
+        formula: el.formula || "",
+        labor_formula: el.labor_formula || "",
+        markup: parseInt(el.markup.toString()) || 0,
+        material_cost: parseFloat(el.material_cost.toString()) || 0, 
+        labor_cost: parseFloat(el.labor_cost.toString()) || 0, 
+        element: {
+          id: el.element.id,
+          name: el.element.name,
+          description: el.element.description || "",
+          formula: el.element.formula || "",
+          labor_formula: el.element.labor_formula || ""
+        },
+        module: {
+          id: el.module.id,
+          name: el.module.name,
+          description: el.module.description || ""
+        }
+      }));
+
+      const formattedParameters = selectedParameters.map(param => {
+        let paramValue = param.value;
+        
+        if (typeof paramValue === 'string' && !isNaN(Number(paramValue))) {
+          paramValue = parseFloat(paramValue);
+        }
+        
+        return {
+          id: param.id,
+          name: param.name,
+          value: paramValue,
+          type: param.type || "number" 
+        };
+      });
+
+      const payload = {
         id: selectedTemplate?.id,
         name: proposalDetails.name,
         title: proposalDetails.name,
@@ -352,9 +418,11 @@ export default function CreateProposal() {
         clientPhone: proposalDetails.phone_number,
         clientAddress: proposalDetails.address,
         image: proposalDetails.image,
-        parameters: selectedParameters,
-        template_elements: selectedElements,
-      });
+        parameters: formattedParameters,
+        template_elements: formattedElements,
+      };
+      
+      submitProposal(payload);
     } catch (error) {
       console.error("Error creating proposal:", error);
       toast.error("Failed to create proposal. Please try again.", {
@@ -366,7 +434,6 @@ export default function CreateProposal() {
     }
   };
 
-  console.log("Selected Parameters:", selectedParameters);
   const handleParameterToggle = (parameter: Parameter) => {
     setSelectedParameters((prev) => {
       const exists = prev.find((p) => p.id === parameter.id);
@@ -389,109 +456,136 @@ export default function CreateProposal() {
     });
   };
 
-  // Navigation functions
-  const goToTab = (tab: string) => setActiveTab(tab);
-
   return (
-    <div className="max-w-full mx-auto relative">
-      <div className="flex justify-between items-center mb-6">
+    <div className="w-full px-4 relative">
+      <div className="flex flex-col space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Create New Proposal</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create a detailed proposal for your client.
+          <h1 className="text-3xl font-bold tracking-tight">Create Proposal</h1>
+          <p className="text-muted-foreground mt-1">
+            Create a detailed proposal for your client
           </p>
         </div>
 
-        {/* Optional: Add a button to manually trigger the tour */}
-        {/* <Button
-          onClick={startTour}
-          variant="outline"
-          size="sm"
-          className="absolute top-6 right-6 h-10 px-4 text-sm font-medium rounded-md border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shadow-md z-50"
-        >
-          <span className="flex items-center gap-1.5">
-            <Info className="w-4 h-4" />
-            Tour Guide
-          </span>
-        </Button> */}
+        <Card className="border shadow-sm">
+          <CardContent className="p-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <div className="flex justify-between items-center w-full mb-8 relative max-w-5xl mx-auto">
+                {/* Background track for progress bar */}
+                <div className="absolute top-[22px] left-[6%] right-[6%] h-1.5 bg-muted rounded-full"></div>
+                
+                {/* Progress bars between steps */}
+                <div 
+                  className={`absolute top-[22px] left-[6%] w-[44%] h-1.5 rounded-full transition-all duration-500 ease-in-out ${
+                    currentStepIndex >= 1 ? "bg-primary shadow-sm shadow-primary/20" : "bg-muted"
+                  }`}
+                  style={{ zIndex: 5 }}
+                ></div>
+                <div 
+                  className={`absolute top-[22px] left-[50%] w-[44%] h-1.5 rounded-full transition-all duration-500 ease-in-out ${
+                    currentStepIndex >= 2 ? "bg-primary shadow-sm shadow-primary/20" : "bg-muted"
+                  }`}
+                  style={{ zIndex: 5 }}
+                ></div>
 
-        {/* <Button
-          value={activeTab}
-          // onValueChange={handleTabChange}
-          className="w-full h-full flex flex-col"
-        >
-          {isSubmitting || isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          Save Proposal
-        </Button> */}
+                {tabSteps.map((step, index) => (
+                  <div
+                    key={step}
+                    className={`flex flex-col items-center relative tab-trigger ${index === 0 ? 'template-tab-trigger' : ''} ${index === 1 ? 'details-tab-trigger' : ''} ${index === 2 ? 'trades-tab-trigger' : ''}`}
+                    data-value={step}
+                    onClick={() => {
+                      if (index <= currentStepIndex + 1) {
+                        setActiveTab(step);
+                      }
+                    }}
+                    style={{ zIndex: 10 }}
+                  >
+                    <div
+                      className={`w-12 h-12 rounded-full flex items-center justify-center border-2 cursor-pointer 
+                        ${
+                          index <= currentStepIndex
+                            ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20"
+                            : index === currentStepIndex + 1
+                            ? "border-primary text-primary hover:bg-primary/10"
+                            : "border-muted-foreground text-muted-foreground"
+                        }
+                        transition-all duration-300 hover:scale-105 z-10
+                      `}
+                    >
+                      {index < currentStepIndex ? (
+                        <Check className="w-6 h-6" />
+                      ) : index === currentStepIndex ? (
+                        <CircleDot className="w-6 h-6" />
+                      ) : (
+                        <span className="text-lg">{index + 1}</span>
+                      )}
+                    </div>
+                    <span
+                      className={`text-sm mt-2 font-medium ${
+                        index <= currentStepIndex
+                          ? "text-primary"
+                          : index === currentStepIndex + 1
+                          ? "text-primary"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {step === "template" ? "Template" : 
+                       step === "details" ? "Details" :
+                       step === "trades" ? "Trades" : step}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Template Selection Tab */}
+              <TabsContent value="template" className="template-tab-content">
+                <TemplateSelectionTab
+                  templates={templates.data || []}
+                  selectedTemplate={selectedTemplate}
+                  handleTemplateSelect={handleTemplateSelect}
+                  onBack={() => null}
+                  onNext={() => setActiveTab("details")}
+                />
+              </TabsContent>
+
+              {/* Proposal Details Tab */}
+              <TabsContent value="details" className="details-tab-content">
+                <ProposalDetailsTab
+                  value={proposalDetails}
+                  onChange={setProposalDetails}
+                  onBack={() => setActiveTab("template")}
+                  onNext={() => setActiveTab("trades")}
+                  errors={errors}
+                />
+              </TabsContent>
+
+              {/* Trades & Parameters Tab */}
+              <TabsContent value="trades" className="trades-tab-content">
+                <TradesTab
+                  modules={modules}
+                  elements={elements}
+                  parameters={parameters}
+                  selectedModules={selectedModules}
+                  selectedElements={selectedElements}
+                  selectedParameters={selectedParameters}
+                  customModules={customModules}
+                  handleModuleToggle={handleModuleToggle}
+                  handleElementToggle={handleElementToggle}
+                  handleElementValueUpdate={handleElementValueUpdate}
+                  handleParameterToggle={handleParameterToggle}
+                  handleParameterValueUpdate={handleParameterValueUpdate}
+                  onBack={() => setActiveTab("details")}
+                  onSubmit={handleSubmit}
+                  isSubmitting={isSubmitting || isPending}
+                  errors={errors}
+                  isUseGlobalMarkup={useGlobalMarkup}
+                  globalMarkupPercentage={globalMarkupPercentage}
+                  onGlobalMarkupChange={handleGlobalMarkupChange}
+                />
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
       </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-4 mb-6">
-          <TabsTrigger value="details" className="tab-trigger" data-value="details">Proposal Details</TabsTrigger>
-          <TabsTrigger value="template" className="tab-trigger" data-value="template">Template Selection</TabsTrigger>
-          <TabsTrigger value="modules" className="tab-trigger" data-value="modules">Modules & Elements</TabsTrigger>
-          <TabsTrigger value="parameters" className="tab-trigger" data-value="parameters">Parameters</TabsTrigger>
-        </TabsList>
-
-        {/* Proposal Details Tab */}
-        <TabsContent value="details" className="details-tab-content">
-          <ProposalDetailsTab
-            value={proposalDetails}
-            onChange={setProposalDetails}
-            onNext={() => goToTab("template")}
-            errors={errors}
-          />
-        </TabsContent>
-
-        {/* Template Selection Tab */}
-        <TabsContent value="template" className="template-tab-content">
-          <TemplateSelectionTab
-            templates={templates}
-            selectedTemplate={selectedTemplate}
-            handleTemplateSelect={handleTemplateSelect}
-            onBack={() => goToTab("details")}
-            onNext={() => goToTab("modules")}
-          />
-        </TabsContent>
-
-        {/* Modules & Elements Tab */}
-        <TabsContent value="modules" className="modules-tab-content">
-          <ModulesTab
-            modules={modules}
-            elements={elements}
-            selectedModules={selectedModules}
-            selectedElements={selectedElements}
-            selectedTemplate={selectedTemplate}
-            selectedParameters={selectedParameters}
-            customModules={customModules}
-            handleModuleToggle={handleModuleToggle}
-            handleAddCustomModule={handleAddCustomModule}
-            handleElementToggle={handleElementToggle}
-            handleElementValueUpdate={handleElementValueUpdate}
-            onBack={() => setActiveTab("template")}
-            onNext={() => setActiveTab("parameters")}
-            errors={errors}
-          />
-        </TabsContent>
-
-        {/* Parameters Tab */}
-        <TabsContent value="parameters" className="parameters-tab-content">
-          <ParametersTab
-            parameters={parameters}
-            selectedParameters={selectedParameters}
-            handleParameterToggle={handleParameterToggle}
-            handleParameterValueUpdate={handleParameterValueUpdate}
-            isSubmitting={isSubmitting}
-            onBack={() => goToTab("modules")}
-            onSubmit={handleSubmit}
-            errors={errors}
-          />
-        </TabsContent>
-      </Tabs>
 
       {/* Tour guide component */}
       <CreateProposalTour 

@@ -6,6 +6,7 @@ export interface Template {
   image?: string;
   modules?: Module[];
   parameters?: Parameter[];
+  template_elements?: TemplateElementWithValues[];
 }
 
 export interface Module {
@@ -30,6 +31,7 @@ export interface Parameter {
 }
 
 export interface ElementWithValues {
+  id: number;
   element: Element;
   module: Module;
   formula: string;
@@ -47,6 +49,7 @@ export interface ProposalFormData {
   phone_number: string;
   address: string;
   image: string;
+  selectedTemplate: Template | null; 
   selectedModules: Module[];
   selectedParameters: Parameter[];
   selectedElements: ElementWithValues[];
@@ -58,6 +61,15 @@ export interface TemplateElement {
   formula: string;
   labor_formula: string;
   image: string;
+}
+
+export interface TemplateElementWithValues {
+  id: number;
+  element: Element;
+  module: Module;
+  material_cost: number | string;
+  labor_cost: number | string;
+  markup: number;
 }
 
 export interface template_elements{
